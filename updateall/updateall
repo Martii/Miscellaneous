@@ -1,0 +1,255 @@
+#!/bin/bash
+
+## Usage:
+#  updateall ["autowake-when"] ["seconds-delay"] ["update-skip"]
+#
+#  Ex:
+#    updateall "tomorrow 04:00" 30 "yesOrAnythingOtherString"
+#    updateall "tomorrow 04:00" 30 ""
+#    updateall "tomorrow 04:00" 30
+#    updateall "tomorrow 04:00"
+#    updateall "+1 hour" 30
+#    updateall
+#
+#  NOTES:
+#    * It is best to set a delay when waking up or rebooting.
+#    * Typically installed in /usr/bin
+#
+# v2026 05 19 005
+#
+##
+
+# Copyright (C) 2026  Marti Martz
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+declare gWAKEAT=""
+declare gDELAY=""
+declare gSKIPUD=""
+
+declare gLOGGER_PATH="$(command -v logger)"
+
+if [ "$EUID" -ne 0 ]; then
+  exec sudo "$0" "$@"
+    exit 1
+else
+  declare gNOHUP_PATH="$(command -v nohup)"
+  declare gSYSTEMD_INHIBIT_PATH="$(command -v systemd-inhibit)"
+  declare gBASH_PATH="$BASH"
+  declare gTEE_PATH="$(command -v tee)"
+  declare gLIVELOG_PATH="/dev/shm/update_live.log"
+  declare gLOG_PATH="/var/log/updateall.log"
+  declare gSYNC_PATH="$(command -v sync)"
+  declare gRTCWAKE_PATH="$(command -v rtcwake)"
+  declare gDATE_PATH="$(command -v date)"
+  declare gREBOOT_REQUIRED_PATH="/var/run/reboot-required"
+  declare gSHUTDOWN_PATH="$(command -v shutdown)"
+  declare gAPT_GET_PATH="$(command -v apt-get)"
+  declare gFLATPAK_PATH="$(command -v flatpak)"
+  declare gSNAP_PATH="$(command -v snap)"
+
+  updatingall() {
+    declare -i lTIMEOUT=1
+    declare lWHEN="$1"
+    declare lDELAY="${2:-0}"
+    declare lSKIP="${3:-}";
+
+    if [ -n "$lDELAY" ]; then
+      sleep "$lDELAY"
+    fi
+
+    if [ -n "$lWHEN" ]; then
+      echo "$(date '+%Y-%m-%d %H:%M:%S') updateall set rtcwake $lWHEN and exec with a $lDELAY second delay and $([ -z "$lSKIP" ] && echo "not ")skipping updates." | "$gTEE_PATH" -a "$gLOG_PATH" ; \
+        "$gSYNC_PATH" ; \
+        "$gRTCWAKE_PATH" -m no -u -t $("$gDATE_PATH" -d "$lWHEN" +%s)
+    else
+      echo "$(date '+%Y-%m-%d %H:%M:%S') updateall" >> "$gLOG_PATH"
+      echo "updateall (bare manual run)"
+    fi
+
+    if [ -f "$gREBOOT_REQUIRED_PATH" ]; then
+      "$gSHUTDOWN_PATH" -r +$lTIMEOUT "System will reboot for maintenance in $lTIMEOUT minutes"
+    elif [ -z "$lSKIP" ]; then
+
+      echo "--- Starting APT Update Chain ---"
+      "$gAPT_GET_PATH" -yqq update && "$gAPT_GET_PATH" -yqq full-upgrade && "$gAPT_GET_PATH" -yqq autoremove 2>&1
+
+      echo "--- Starting Flatpak Update Chain ---"
+      ("$gFLATPAK_PATH" -y --noninteractive update && "$gFLATPAK_PATH" -y --noninteractive uninstall --unused) 2>&1 | awk 'NF {p=1} p'
+
+      echo "--- Starting Snap Refresh ---"
+      "$gSNAP_PATH" refresh
+
+      test -f "$gREBOOT_REQUIRED_PATH" && \
+          "$gSHUTDOWN_PATH" -r +$lTIMEOUT "System will reboot for maintenance in $lTIMEOUT minutes"
+    fi
+
+    exit 0
+  }
+
+  validate_boot_window() {
+    # Categorized Declarations (Grouped and initialized at the very top)
+    declare lMAX_UPTIME_WINDOW=$((10 * 60))                   # Max allowed system uptime bound
+    declare lOFFSET=$((5 * 60))                               # Target calibration math shift size
+
+    declare lDATE="" lAWK="" lGREP="" lUPTIME=""              # Binary paths
+    declare lBOOT=0 lTARGET=0 lUP=0 lDIFF=0                   # Math and time metrics
+    declare lNOW=0                                            # Current system epoch tracker
+
+    # Synchronize Parameter 2 (Delay): Defaults strictly to an empty string if omitted
+    gDELAY="${2:-${lDELAY:-""}}"
+
+    # Synchronize Parameter 3 (Skip Check): Check command line argument first, fallback to cron env
+    gSKIPUD="${3:-${lSKIPUD:+yes}}"
+
+    # USE CASE CHECK: If $1 is totally empty (Bare Manual), skip everything cleanly
+    [ -z "$1" ] && return 0
+
+    # Dynamically resolve absolute paths using command -v
+    lDATE=$(command -v date)
+    lAWK=$(command -v awk)
+    lGREP=$(command -v grep)
+    lUPTIME=$(command -v uptime)
+
+    # Track current timestamp epoch metrics
+    lNOW=$($lDATE +%s)
+
+    # Clean the input string to protect GNU date from formatting artifacts
+    declare lPARSED_INPUT="$1"
+
+    # Extract the raw HH:MM clock pattern, supporting both padded and single-digit minutes (e.g., "10:5")
+    declare lEXTRACTED_TIME=""
+    lEXTRACTED_TIME=$(echo "$lPARSED_INPUT" | $lGREP -oE '[0-9]{1,2}:[0-9]{1,2}')
+
+    if [ -n "$lEXTRACTED_TIME" ]; then
+      # Internal Bash padding logic to fix single-digit hour/minute fields without using sprintf
+      declare lHR="${lEXTRACTED_TIME%:*}"
+      declare lMIN="${lEXTRACTED_TIME#*:}"
+      [ ${#lHR} -eq 1 ] && lHR="0$lHR"
+      [ ${#lMIN} -eq 1 ] && lMIN="0$lMIN"
+      declare lPADDED_TIME="$lHR:$lMIN"
+
+      # Reconstruct the string with the freshly padded time format
+      lPARSED_INPUT=$(echo "$lPARSED_INPUT" | sed "s/$lEXTRACTED_TIME/$lPADDED_TIME/")
+
+      # If the string contains "tomorrow", explicitly preserve that timeline shift direction cleanly
+      if echo "$lPARSED_INPUT" | $lGREP -q "tomorrow"; then
+        lTARGET=$($lDATE -d "tomorrow $lPADDED_TIME" +%s 2>/dev/null || return 0)
+      else
+        lTARGET=$($lDATE -d "today $lPADDED_TIME" +%s 2>/dev/null || return 0)
+      fi
+    else
+      # Standard safe processing fallback for relative manual syntax like "+1 hour"
+      lTARGET=$($lDATE -d "$lPARSED_INPUT" +%s 2>/dev/null || return 0)
+    fi
+
+    # Deduct your exact calibration offset (5 minutes) uniformly across all execution types
+    lTARGET=$(( lTARGET - lOFFSET ))
+
+    # Export the calibrated absolute timestamp string format for the downstream execution hooks
+    gWAKEAT=$($lDATE -d "@$lTARGET" +"%Y-%m-%d %H:%M:%S")
+
+    # Isolate total system uptime integers and target window differentials
+    lUP=$($lAWK '{print int($1)}' /proc/uptime)
+    lDIFF=$(( lNOW - lTARGET ))
+
+    # Hard Block Execution: Exit ONLY the helper function loop via return to protect terminal outputs
+    { [ "$lDIFF" -gt "$lMAX_UPTIME_WINDOW" ] || [ "$lUP" -le "$lMAX_UPTIME_WINDOW" ]; } && return 0
+  }
+
+  log_and_maybe_show() {
+    "$gLOGGER_PATH" -t updateall
+  }
+
+  validate_boot_window "$@"
+
+  export -f updatingall
+
+  export \
+      gLOGGER_PATH \
+      gNOHUP_PATH \
+      gSYSTEMD_INHIBIT_PATH \
+      gBASH_PATH \
+      gTEE_PATH \
+      gLIVELOG_PATH \
+      gLOG_PATH \
+      gSYNC_PATH \
+      gRTCWAKE_PATH \
+      gDATE_PATH \
+      gREBOOT_REQUIRED_PATH \
+      gSHUTDOWN_PATH \
+      gAPT_GET_PATH \
+      gFLATPAK_PATH \
+      gSNAP_PATH
+
+  ( "$gNOHUP_PATH" "$gSYSTEMD_INHIBIT_PATH" \
+      --why="Running updates" \
+      --mode=block \
+      --what=idle:sleep:shutdown:handle-power-key:handle-suspend-key:handle-hibernate-key:handle-lid-switch \
+        "$gBASH_PATH" -c 'updatingall "$1" "$2" "$3" 2>&1' -- "$gWAKEAT" "$gDELAY" "$gSKIPUD" | \
+            "$gTEE_PATH" "$gLIVELOG_PATH" >(log_and_maybe_show) ) > /dev/null 2>&1 &
+
+  lPID=$!
+  [ -t 1 ] && ( sleep 0.1; tail --pid=$lPID -f "$gLIVELOG_PATH" )
+fi
+
+# --- MISCELLANEOUS HELPFUL COMMANDS ---
+# sudo cat /proc/driver/rtc | grep alrm
+# sudo rtcwake -m show
+# journalctl -t updateall --no-pager
+# dmesg | grep -i rtc
+# journalctl | grep -i "systemd-sleep"
+# journalctl --since "03:59" --until "04:01"
+# dmesg | grep -i "wake"
+# journalctl | grep -i "inhibit"
+#
+# clear ; \
+#     echo '$ updateall' ; \
+#     updateall ; \
+#     echo '$ journalctl -t updateall --since "5 minutes ago" --no-pager' ; \
+#     journalctl -t updateall --since "5 minutes ago" --no-pager
+#
+#
+# clear ; \
+#     echo '$ updateall "tomorrow 04:00"' ; \
+#     updateall "tomorrow 04:00" ; \
+#     echo '$ journalctl -t updateall --since "5 minutes ago" --no-pager' ; \
+#     journalctl -t updateall --since "5 minutes ago" --no-pager
+#
+#
+# --- DOWNSTREAM EXECUTION HOOK ---
+# Reference these variables in your systemd-inhibit call below:
+# -- "$gWAKEAT" "$gDELAY" "$gSKIPUD"
+#
+# --- CRONTAB DEPLOYMENTS (MULTILINE FORMAT) ---
+# Reboot run [200 Payload Characters][WHOLE-LINE-CRC32: 228833E8]
+# @reboot /bin/sh -c ' \
+# lEXEC="/usr/bin/updateall"; lOFF="5"; lDELAY="30"; lSKIPUD=""; \
+# set -- $(crontab -l | grep "$lEXEC" | grep -vE "^(#|@)"); \
+# $lEXEC "tomorrow $2:$1 - $lOFF minutes" "$lDELAY" "$lSKIPUD" \
+# '
+#
+# Once a day run [161 Payload Characters][WHOLE-LINE-CRC32: 7A98460E]
+# 0 4 * * * /bin/sh -c ' \
+# lEXEC="/usr/bin/updateall"; lOFF="5"; \
+# set -- $(crontab -l | grep "$lEXEC" | grep -vE "^(#|@)"); \
+# $lEXEC "tomorrow $2:$1 - $lOFF minutes" \
+# ' #UPDATEALL
+#
+# --- CRONTAB DEPLOYMENTS (SINGLE-LINE FORMAT) ---
+# Reboot run [200 Payload Characters][WHOLE-LINE-CRC32: 653B9AE6]
+# @reboot /bin/sh -c 'lEXEC="/usr/bin/updateall"; lOFF="5"; lDELAY="30"; lSKIPUD=""; set -- $(crontab -l | grep "$lEXEC" | grep -vE "^(#|@)"); $lEXEC "tomorrow $2:$1 - $lOFF minutes" "$lDELAY" "$lSKIPUD"'
+#
+# Once a day run [161 Payload Characters][WHOLE-LINE-CRC32: 72AC69DD]
+# 0 4 * * * /bin/sh -c 'lEXEC="/usr/bin/updateall"; lOFF="5"; set -- $(crontab -l | grep "$lEXEC" | grep -vE "^(#|@)"); $lEXEC "tomorrow $2:$1 - $lOFF minutes"' #UPDATEALL
