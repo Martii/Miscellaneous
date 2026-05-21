@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 05 19 005
+# v2026 05 21 001
 #
 ##
 
@@ -56,6 +56,7 @@ else
   declare gREBOOT_REQUIRED_PATH="/var/run/reboot-required"
   declare gSHUTDOWN_PATH="$(command -v shutdown)"
   declare gAPT_GET_PATH="$(command -v apt-get)"
+  declare gRUNUSER_PATH=$(command -v runuser)
   declare gFLATPAK_PATH="$(command -v flatpak)"
   declare gSNAP_PATH="$(command -v snap)"
 
@@ -64,6 +65,11 @@ else
     declare lWHEN="$1"
     declare lDELAY="${2:-0}"
     declare lSKIP="${3:-}";
+    declare lPASSWD_FILE="/etc/passwd"
+    declare lUSERNAME=""
+    declare lUID=""
+    declare lHOME_DIR=""
+    declare lFLATPAK_DIR=""
 
     if [ -n "$lDELAY" ]; then
       sleep "$lDELAY"
@@ -83,10 +89,35 @@ else
     elif [ -z "$lSKIP" ]; then
 
       echo "--- Starting APT Update Chain ---"
-      "$gAPT_GET_PATH" -yqq update && "$gAPT_GET_PATH" -yqq full-upgrade && "$gAPT_GET_PATH" -yqq autoremove 2>&1
 
       echo "--- Starting Flatpak Update Chain ---"
-      ("$gFLATPAK_PATH" -y --noninteractive update && "$gFLATPAK_PATH" -y --noninteractive uninstall --unused) 2>&1 | awk 'NF {p=1} p'
+
+        echo "- Updating system-wide"
+
+        ( "$gFLATPAK_PATH" -y --noninteractive update &&
+          "$gFLATPAK_PATH" -y --noninteractive uninstall --unused ) 2>&1 | awk 'NF {p=1} p'
+
+        echo "- Updating user-wide"
+
+        while IFS=: read -r lUSERNAME _ lUID _ _ lHOME_DIR _; do
+
+          if [ "$lUID" -lt 1000 ] || [ "$lUID" -eq 65534 ]; then
+            continue
+          fi
+
+          lFLATPAK_DIR="$lHOME_DIR/.local/share/flatpak"
+
+          if [ -d "$lFLATPAK_DIR" ]; then
+            lUSER_COUNT+=1
+            echo "- Updating Flatpaks for User $lUSER_COUNT"
+
+            ( DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$lUID/bus" "$gRUNUSER_PATH" -l "$lUSERNAME" -c \
+                "\"$gFLATPAK_PATH\" --user -y --noninteractive update" &&
+              DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$lUID/bus" "$gRUNUSER_PATH" -l "$lUSERNAME" -c \
+                  "\"$gFLATPAK_PATH\" --user -y --noninteractive uninstall --unused" ) 2>&1 | awk 'NF {p=1} p'
+          fi
+
+        done < "$lPASSWD_FILE"
 
       echo "--- Starting Snap Refresh ---"
       "$gSNAP_PATH" refresh
@@ -191,6 +222,7 @@ else
       gSHUTDOWN_PATH \
       gAPT_GET_PATH \
       gFLATPAK_PATH \
+      gRUNUSER_PATH \
       gSNAP_PATH
 
   ( "$gNOHUP_PATH" "$gSYSTEMD_INHIBIT_PATH" \
