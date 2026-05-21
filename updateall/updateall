@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 05 21 001
+# v2026 05 21 002
 #
 ##
 
@@ -58,6 +58,7 @@ else
   declare gAPT_GET_PATH="$(command -v apt-get)"
   declare gRUNUSER_PATH=$(command -v runuser)
   declare gFLATPAK_PATH="$(command -v flatpak)"
+  declare gAWK_PATH=$(command -v awk)
   declare gSNAP_PATH="$(command -v snap)"
 
   updatingall() {
@@ -76,11 +77,11 @@ else
     fi
 
     if [ -n "$lWHEN" ]; then
-      echo "$(date '+%Y-%m-%d %H:%M:%S') updateall set rtcwake $lWHEN and exec with a $lDELAY second delay and $([ -z "$lSKIP" ] && echo "not ")skipping updates." | "$gTEE_PATH" -a "$gLOG_PATH" ; \
+      echo "$($gDATE_PATH '+%Y-%m-%d %H:%M:%S') updateall set rtcwake $lWHEN and exec with a $lDELAY second delay and $([ -z "$lSKIP" ] && echo "not ")skipping updates." | "$gTEE_PATH" -a "$gLOG_PATH" ; \
         "$gSYNC_PATH" ; \
         "$gRTCWAKE_PATH" -m no -u -t $("$gDATE_PATH" -d "$lWHEN" +%s)
     else
-      echo "$(date '+%Y-%m-%d %H:%M:%S') updateall" >> "$gLOG_PATH"
+      echo "$($gDATE_PATH '+%Y-%m-%d %H:%M:%S') updateall" >> "$gLOG_PATH"
       echo "updateall (bare manual run)"
     fi
 
@@ -95,7 +96,7 @@ else
         echo "- Updating system-wide"
 
         ( "$gFLATPAK_PATH" -y --noninteractive update &&
-          "$gFLATPAK_PATH" -y --noninteractive uninstall --unused ) 2>&1 | awk 'NF {p=1} p'
+          "$gFLATPAK_PATH" -y --noninteractive uninstall --unused ) 2>&1 | "$gAWK_PATH" 'NF {p=1} p'
 
         echo "- Updating user-wide"
 
@@ -114,7 +115,7 @@ else
             ( DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$lUID/bus" "$gRUNUSER_PATH" -l "$lUSERNAME" -c \
                 "\"$gFLATPAK_PATH\" --user -y --noninteractive update" &&
               DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$lUID/bus" "$gRUNUSER_PATH" -l "$lUSERNAME" -c \
-                  "\"$gFLATPAK_PATH\" --user -y --noninteractive uninstall --unused" ) 2>&1 | awk 'NF {p=1} p'
+                  "\"$gFLATPAK_PATH\" --user -y --noninteractive uninstall --unused" ) 2>&1 | "$gAWK_PATH" 'NF {p=1} p'
           fi
 
         done < "$lPASSWD_FILE"
@@ -134,7 +135,7 @@ else
     declare lMAX_UPTIME_WINDOW=$((10 * 60))                   # Max allowed system uptime bound
     declare lOFFSET=$((5 * 60))                               # Target calibration math shift size
 
-    declare lDATE="" lAWK="" lGREP="" lUPTIME=""              # Binary paths
+    declare lGREP_PATH="" lUPTIME_PATH=""                     # Binary paths
     declare lBOOT=0 lTARGET=0 lUP=0 lDIFF=0                   # Math and time metrics
     declare lNOW=0                                            # Current system epoch tracker
 
@@ -148,20 +149,19 @@ else
     [ -z "$1" ] && return 0
 
     # Dynamically resolve absolute paths using command -v
-    lDATE=$(command -v date)
-    lAWK=$(command -v awk)
-    lGREP=$(command -v grep)
-    lUPTIME=$(command -v uptime)
+    lSED_PATH=$(command -v sed)
+    lGREP_PATH=$(command -v grep)
+    lUPTIME_PATH=$(command -v uptime)
 
     # Track current timestamp epoch metrics
-    lNOW=$($lDATE +%s)
+    lNOW=$($gDATE_PATH +%s)
 
     # Clean the input string to protect GNU date from formatting artifacts
     declare lPARSED_INPUT="$1"
 
     # Extract the raw HH:MM clock pattern, supporting both padded and single-digit minutes (e.g., "10:5")
     declare lEXTRACTED_TIME=""
-    lEXTRACTED_TIME=$(echo "$lPARSED_INPUT" | $lGREP -oE '[0-9]{1,2}:[0-9]{1,2}')
+    lEXTRACTED_TIME=$(echo "$lPARSED_INPUT" | $lGREP_PATH -oE '[0-9]{1,2}:[0-9]{1,2}')
 
     if [ -n "$lEXTRACTED_TIME" ]; then
       # Internal Bash padding logic to fix single-digit hour/minute fields without using sprintf
@@ -172,27 +172,27 @@ else
       declare lPADDED_TIME="$lHR:$lMIN"
 
       # Reconstruct the string with the freshly padded time format
-      lPARSED_INPUT=$(echo "$lPARSED_INPUT" | sed "s/$lEXTRACTED_TIME/$lPADDED_TIME/")
+      lPARSED_INPUT=$(echo "$lPARSED_INPUT" | "$lSED_PATH" "s/$lEXTRACTED_TIME/$lPADDED_TIME/")
 
       # If the string contains "tomorrow", explicitly preserve that timeline shift direction cleanly
-      if echo "$lPARSED_INPUT" | $lGREP -q "tomorrow"; then
-        lTARGET=$($lDATE -d "tomorrow $lPADDED_TIME" +%s 2>/dev/null || return 0)
+      if echo "$lPARSED_INPUT" | $lGREP_PATH -q "tomorrow"; then
+        lTARGET=$($gDATE_PATH -d "tomorrow $lPADDED_TIME" +%s 2>/dev/null || return 0)
       else
-        lTARGET=$($lDATE -d "today $lPADDED_TIME" +%s 2>/dev/null || return 0)
+        lTARGET=$($gDATE_PATH -d "today $lPADDED_TIME" +%s 2>/dev/null || return 0)
       fi
     else
       # Standard safe processing fallback for relative manual syntax like "+1 hour"
-      lTARGET=$($lDATE -d "$lPARSED_INPUT" +%s 2>/dev/null || return 0)
+      lTARGET=$($gDATE_PATH -d "$lPARSED_INPUT" +%s 2>/dev/null || return 0)
     fi
 
     # Deduct your exact calibration offset (5 minutes) uniformly across all execution types
     lTARGET=$(( lTARGET - lOFFSET ))
 
     # Export the calibrated absolute timestamp string format for the downstream execution hooks
-    gWAKEAT=$($lDATE -d "@$lTARGET" +"%Y-%m-%d %H:%M:%S")
+    gWAKEAT=$($gDATE_PATH -d "@$lTARGET" +"%Y-%m-%d %H:%M:%S")
 
     # Isolate total system uptime integers and target window differentials
-    lUP=$($lAWK '{print int($1)}' /proc/uptime)
+    lUP=$($gAWK_PATH '{print int($1)}' /proc/uptime)
     lDIFF=$(( lNOW - lTARGET ))
 
     # Hard Block Execution: Exit ONLY the helper function loop via return to protect terminal outputs
@@ -223,6 +223,7 @@ else
       gAPT_GET_PATH \
       gFLATPAK_PATH \
       gRUNUSER_PATH \
+      gAWK_PATH \
       gSNAP_PATH
 
   ( "$gNOHUP_PATH" "$gSYSTEMD_INHIBIT_PATH" \
