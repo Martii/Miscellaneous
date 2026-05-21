@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 05 21 002
+# v2026 05 21 003
 #
 ##
 
@@ -90,6 +90,7 @@ else
     elif [ -z "$lSKIP" ]; then
 
       echo "--- Starting APT Update Chain ---"
+      "$gAPT_GET_PATH" -yqq update && "$gAPT_GET_PATH" -yqq full-upgrade && "$gAPT_GET_PATH" -yqq autoremove 2>&1
 
       echo "--- Starting Flatpak Update Chain ---"
 
