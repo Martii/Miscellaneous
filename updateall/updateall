@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 05 21 003
+# v2026 05 23 001
 #
 ##
 
@@ -87,11 +87,15 @@ else
 
     if [ -f "$gREBOOT_REQUIRED_PATH" ]; then
       "$gSHUTDOWN_PATH" -r +$lTIMEOUT "System will reboot for maintenance in $lTIMEOUT minutes"
+
     elif [ -z "$lSKIP" ]; then
 
+    if [ -n "$gAPT_GET_PATH" ]; then
       echo "--- Starting APT Update Chain ---"
       "$gAPT_GET_PATH" -yqq update && "$gAPT_GET_PATH" -yqq full-upgrade && "$gAPT_GET_PATH" -yqq autoremove 2>&1
+    fi
 
+    if [ -n "$gFLATPAK_PATH" ]; then
       echo "--- Starting Flatpak Update Chain ---"
 
         echo "- Updating system-wide"
@@ -120,9 +124,12 @@ else
           fi
 
         done < "$lPASSWD_FILE"
+      fi
 
-      echo "--- Starting Snap Refresh ---"
-      "$gSNAP_PATH" refresh
+      if [ -n "$gSNAP_PATH" ]; then
+        echo "--- Starting Snap Refresh ---"
+        "$gSNAP_PATH" refresh
+      fi
 
       test -f "$gREBOOT_REQUIRED_PATH" && \
           "$gSHUTDOWN_PATH" -r +$lTIMEOUT "System will reboot for maintenance in $lTIMEOUT minutes"
