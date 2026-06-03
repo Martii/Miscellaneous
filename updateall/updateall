@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 05 23 001
+# v2026 06 03 001
 #
 ##
 
@@ -274,23 +274,23 @@ fi
 # -- "$gWAKEAT" "$gDELAY" "$gSKIPUD"
 #
 # --- CRONTAB DEPLOYMENTS (MULTILINE FORMAT) ---
-# Reboot run [200 Payload Characters][WHOLE-LINE-CRC32: 228833E8]
+# Reboot run [256 Payload Characters][LOGICAL-LINE-CRC32: 44D5F488]
 # @reboot /bin/sh -c ' \
-# lEXEC="/usr/bin/updateall"; lOFF="5"; lDELAY="30"; lSKIPUD=""; \
-# set -- $(crontab -l | grep "$lEXEC" | grep -vE "^(#|@)"); \
-# $lEXEC "tomorrow $2:$1 - $lOFF minutes" "$lDELAY" "$lSKIPUD" \
+#     lEXEC="/usr/bin/updateall"; lOFF="5"; lDELAY="30"; lSKIPUD=""; \
+#     set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); \
+#     $lEXEC "tomorrow $2:$1 - $lOFF minutes" "$lDELAY" "$lSKIPUD" \
 # '
 #
-# Once a day run [161 Payload Characters][WHOLE-LINE-CRC32: 7A98460E]
+# Once a day run [223 Payload Characters][LOGICAL-LINE-CRC32: 5F3C7A91]
 # 0 4 * * * /bin/sh -c ' \
-# lEXEC="/usr/bin/updateall"; lOFF="5"; \
-# set -- $(crontab -l | grep "$lEXEC" | grep -vE "^(#|@)"); \
-# $lEXEC "tomorrow $2:$1 - $lOFF minutes" \
+#     lEXEC="/usr/bin/updateall"; lOFF="5"; \
+#     set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); \
+#     $lEXEC "tomorrow $2:$1 - $lOFF minutes" \
 # ' #UPDATEALL
 #
 # --- CRONTAB DEPLOYMENTS (SINGLE-LINE FORMAT) ---
-# Reboot run [200 Payload Characters][WHOLE-LINE-CRC32: 653B9AE6]
-# @reboot /bin/sh -c 'lEXEC="/usr/bin/updateall"; lOFF="5"; lDELAY="30"; lSKIPUD=""; set -- $(crontab -l | grep "$lEXEC" | grep -vE "^(#|@)"); $lEXEC "tomorrow $2:$1 - $lOFF minutes" "$lDELAY" "$lSKIPUD"'
+# Reboot run [234 Payload Characters][WHOLE-LINE-CRC32: D02CDF85]
+# @reboot /bin/sh -c 'lEXEC="/usr/bin/updateall"; lOFF="5"; lDELAY="30"; lSKIPUD=""; set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); $lEXEC "tomorrow $2:$1 - $lOFF minutes" "$lDELAY" "$lSKIPUD"'
 #
-# Once a day run [161 Payload Characters][WHOLE-LINE-CRC32: 72AC69DD]
-# 0 4 * * * /bin/sh -c 'lEXEC="/usr/bin/updateall"; lOFF="5"; set -- $(crontab -l | grep "$lEXEC" | grep -vE "^(#|@)"); $lEXEC "tomorrow $2:$1 - $lOFF minutes"' #UPDATEALL
+# Once a day run [201 Payload Characters][WHOLE-LINE-CRC32: 3AD1EB7D]
+# 0 4 * * * /bin/sh -c 'lEXEC="/usr/bin/updateall"; lOFF="5"; set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); $lEXEC "tomorrow $2:$1 - $lOFF minutes"' #UPDATEALL
