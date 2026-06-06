@@ -1,7 +1,9 @@
 #!/bin/bash
 
 # Needed for some distro's
-gTARGETS="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+declare gTARGETS="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+declare gDIR=""
+declare gTARGET=""
 
 IFS=':'
 for gDIR in $gTARGETS; do
@@ -27,7 +29,7 @@ unset IFS
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 06 05 001
+# v2026 06 05 002
 #
 ##
 
