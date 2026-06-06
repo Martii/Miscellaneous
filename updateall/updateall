@@ -1,5 +1,17 @@
 #!/bin/bash
 
+# Needed for some distro's
+gTARGETS="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+IFS=':'
+for gDIR in $gTARGETS; do
+  case ":$PATH:" in
+    *":$gDIR:"*) ;;
+    *) PATH="$PATH:$gDIR" ;;
+  esac
+done
+unset IFS
+
 ## Usage:
 #  updateall ["autowake-when"] ["seconds-delay"] ["update-skip"]
 #
@@ -15,7 +27,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 06 03 001
+# v2026 06 05 001
 #
 ##
 
@@ -38,28 +50,28 @@ declare gWAKEAT=""
 declare gDELAY=""
 declare gSKIPUD=""
 
-declare gLOGGER_PATH="$(command -v logger)"
+declare gLOGGER_PATH="$(type -P logger)"
 
 if [ "$EUID" -ne 0 ]; then
   exec sudo "$0" "$@"
     exit 1
 else
-  declare gNOHUP_PATH="$(command -v nohup)"
-  declare gSYSTEMD_INHIBIT_PATH="$(command -v systemd-inhibit)"
+  declare gNOHUP_PATH="$(type -P nohup)"
+  declare gSYSTEMD_INHIBIT_PATH="$(type -P systemd-inhibit)"
   declare gBASH_PATH="$BASH"
-  declare gTEE_PATH="$(command -v tee)"
+  declare gTEE_PATH="$(type -P tee)"
   declare gLIVELOG_PATH="/dev/shm/update_live.log"
   declare gLOG_PATH="/var/log/updateall.log"
-  declare gSYNC_PATH="$(command -v sync)"
-  declare gRTCWAKE_PATH="$(command -v rtcwake)"
-  declare gDATE_PATH="$(command -v date)"
+  declare gSYNC_PATH="$(type -P sync)"
+  declare gRTCWAKE_PATH="$(type -P rtcwake)"
+  declare gDATE_PATH="$(type -P date)"
   declare gREBOOT_REQUIRED_PATH="/var/run/reboot-required"
-  declare gSHUTDOWN_PATH="$(command -v shutdown)"
-  declare gAPT_GET_PATH="$(command -v apt-get)"
-  declare gRUNUSER_PATH=$(command -v runuser)
-  declare gFLATPAK_PATH="$(command -v flatpak)"
-  declare gAWK_PATH=$(command -v awk)
-  declare gSNAP_PATH="$(command -v snap)"
+  declare gSHUTDOWN_PATH="$(type -P shutdown)"
+  declare gAPT_GET_PATH="$(type -P apt-get)"
+  declare gRUNUSER_PATH=$(type -P runuser)
+  declare gFLATPAK_PATH="$(type -P flatpak)"
+  declare gAWK_PATH=$(type -P awk)
+  declare gSNAP_PATH="$(type -P snap)"
 
   updatingall() {
     declare -i lTIMEOUT=1
@@ -114,7 +126,7 @@ else
           lFLATPAK_DIR="$lHOME_DIR/.local/share/flatpak"
 
           if [ -d "$lFLATPAK_DIR" ]; then
-            lUSER_COUNT+=1
+            ((lUSER_COUNT+=1))
             echo "- Updating Flatpaks for User $lUSER_COUNT"
 
             ( DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$lUID/bus" "$gRUNUSER_PATH" -l "$lUSERNAME" -c \
@@ -156,10 +168,10 @@ else
     # USE CASE CHECK: If $1 is totally empty (Bare Manual), skip everything cleanly
     [ -z "$1" ] && return 0
 
-    # Dynamically resolve absolute paths using command -v
-    lSED_PATH=$(command -v sed)
-    lGREP_PATH=$(command -v grep)
-    lUPTIME_PATH=$(command -v uptime)
+    # Dynamically resolve absolute paths using type -P
+    lSED_PATH=$(type -P sed)
+    lGREP_PATH=$(type -P grep)
+    lUPTIME_PATH=$(type -P uptime)
 
     # Track current timestamp epoch metrics
     lNOW=$($gDATE_PATH +%s)
