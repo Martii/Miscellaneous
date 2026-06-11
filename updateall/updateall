@@ -1,19 +1,5 @@
 #!/bin/bash
 
-# Needed for some distro's
-declare gTARGETS="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-declare gDIR=""
-declare gTARGET=""
-
-IFS=':'
-for gDIR in $gTARGETS; do
-  case ":$PATH:" in
-    *":$gDIR:"*) ;;
-    *) PATH="$PATH:$gDIR" ;;
-  esac
-done
-unset IFS
-
 ## Usage:
 #  updateall ["autowake-when"] ["seconds-delay"] ["update-skip"]
 #
@@ -29,7 +15,7 @@ unset IFS
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 06 05 002
+# v2026 06 11 001
 #
 ##
 
@@ -48,6 +34,29 @@ unset IFS
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+
+# Needed for some distro's
+declare gTARGETS="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+declare gDIR=""
+declare gTARGET=""
+
+IFS=':'
+for gDIR in $gTARGETS; do
+  case ":$PATH:" in
+    *":$gDIR:"*) ;;
+    *) PATH="$PATH:$gDIR" ;;
+  esac
+done
+unset IFS
+
+# Get the directory of the running script
+declare gSCRIPT_BRANCH="${BASH_SOURCE%/*}"
+
+# Kill first script will be in same folder as updateall... may be string empty to ignore
+# Targetted for users who don't close applications when they are finished when an update is available
+declare gSCRIPT_KILLFIRST="$gSCRIPT_BRANCH/updateallkillfirst"
+
+##
 declare gWAKEAT=""
 declare gDELAY=""
 declare gSKIPUD=""
@@ -104,41 +113,48 @@ else
 
     elif [ -z "$lSKIP" ]; then
 
-    if [ -n "$gAPT_GET_PATH" ]; then
-      echo "--- Starting APT Update Chain ---"
-      "$gAPT_GET_PATH" -yqq update && "$gAPT_GET_PATH" -yqq full-upgrade && "$gAPT_GET_PATH" -yqq autoremove 2>&1
-    fi
-
-    if [ -n "$gFLATPAK_PATH" ]; then
-      echo "--- Starting Flatpak Update Chain ---"
-
-        echo "- Updating system-wide"
-
-        ( "$gFLATPAK_PATH" -y --noninteractive update &&
-          "$gFLATPAK_PATH" -y --noninteractive uninstall --unused ) 2>&1 | "$gAWK_PATH" 'NF {p=1} p'
-
-        echo "- Updating user-wide"
-
-        while IFS=: read -r lUSERNAME _ lUID _ _ lHOME_DIR _; do
-
-          if [ "$lUID" -lt 1000 ] || [ "$lUID" -eq 65534 ]; then
-            continue
-          fi
-
-          lFLATPAK_DIR="$lHOME_DIR/.local/share/flatpak"
-
-          if [ -d "$lFLATPAK_DIR" ]; then
-            ((lUSER_COUNT+=1))
-            echo "- Updating Flatpaks for User $lUSER_COUNT"
-
-            ( DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$lUID/bus" "$gRUNUSER_PATH" -l "$lUSERNAME" -c \
-                "\"$gFLATPAK_PATH\" --user -y --noninteractive update" &&
-              DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$lUID/bus" "$gRUNUSER_PATH" -l "$lUSERNAME" -c \
-                  "\"$gFLATPAK_PATH\" --user -y --noninteractive uninstall --unused" ) 2>&1 | "$gAWK_PATH" 'NF {p=1} p'
-          fi
-
-        done < "$lPASSWD_FILE"
+      if [ -n "$lWHEN" ] && [ -n "$gSCRIPT_KILLFIRST" ] \
+          && [ -f "$gSCRIPT_KILLFIRST" ] \
+              && [ -r "$gSCRIPT_KILLFIRST" ] \
+                  && [ ! -x "$gSCRIPT_KILLFIRST" ]; then
+        source "$gSCRIPT_KILLFIRST"
       fi
+
+      if [ -n "$gAPT_GET_PATH" ]; then
+        echo "--- Starting APT Update Chain ---"
+        "$gAPT_GET_PATH" -yqq update && "$gAPT_GET_PATH" -yqq full-upgrade && "$gAPT_GET_PATH" -yqq autoremove 2>&1
+      fi
+
+      if [ -n "$gFLATPAK_PATH" ]; then
+        echo "--- Starting Flatpak Update Chain ---"
+
+          echo "- Updating system-wide"
+
+          ( "$gFLATPAK_PATH" -y --noninteractive update &&
+            "$gFLATPAK_PATH" -y --noninteractive uninstall --unused ) 2>&1 | "$gAWK_PATH" 'NF {p=1} p'
+
+          echo "- Updating user-wide"
+
+          while IFS=: read -r lUSERNAME _ lUID _ _ lHOME_DIR _; do
+
+            if [ "$lUID" -lt 1000 ] || [ "$lUID" -eq 65534 ]; then
+              continue
+            fi
+
+            lFLATPAK_DIR="$lHOME_DIR/.local/share/flatpak"
+
+            if [ -d "$lFLATPAK_DIR" ]; then
+              ((lUSER_COUNT+=1))
+              echo "- Updating Flatpaks for User $lUSER_COUNT"
+
+              ( DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$lUID/bus" "$gRUNUSER_PATH" -l "$lUSERNAME" -c \
+                  "\"$gFLATPAK_PATH\" --user -y --noninteractive update" &&
+                DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$lUID/bus" "$gRUNUSER_PATH" -l "$lUSERNAME" -c \
+                    "\"$gFLATPAK_PATH\" --user -y --noninteractive uninstall --unused" ) 2>&1 | "$gAWK_PATH" 'NF {p=1} p'
+            fi
+
+          done < "$lPASSWD_FILE"
+        fi
 
       if [ -n "$gSNAP_PATH" ]; then
         echo "--- Starting Snap Refresh ---"
@@ -242,6 +258,7 @@ else
       gDATE_PATH \
       gREBOOT_REQUIRED_PATH \
       gSHUTDOWN_PATH \
+      gSCRIPT_KILLFIRST \
       gAPT_GET_PATH \
       gFLATPAK_PATH \
       gRUNUSER_PATH \
