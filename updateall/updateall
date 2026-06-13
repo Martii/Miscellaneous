@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 06 11 001
+# v2026 06 12 001
 #
 ##
 
@@ -54,7 +54,7 @@ declare gSCRIPT_BRANCH="${BASH_SOURCE%/*}"
 
 # Kill first script will be in same folder as updateall... may be string empty to ignore
 # Targetted for users who don't close applications when they are finished when an update is available
-declare gSCRIPT_KILLFIRST="$gSCRIPT_BRANCH/updateallkillfirst"
+declare gSCRIPT_PREFLIGHT="$gSCRIPT_BRANCH/updateallkillfirst"
 
 ##
 declare gWAKEAT=""
@@ -113,11 +113,11 @@ else
 
     elif [ -z "$lSKIP" ]; then
 
-      if [ -n "$lWHEN" ] && [ -n "$gSCRIPT_KILLFIRST" ] \
-          && [ -f "$gSCRIPT_KILLFIRST" ] \
-              && [ -r "$gSCRIPT_KILLFIRST" ] \
-                  && [ ! -x "$gSCRIPT_KILLFIRST" ]; then
-        source "$gSCRIPT_KILLFIRST"
+      if [ -n "$lWHEN" ] && [ -n "$gSCRIPT_PREFLIGHT" ] \
+          && [ -f "$gSCRIPT_PREFLIGHT" ] \
+              && [ -r "$gSCRIPT_PREFLIGHT" ] \
+                  && [ ! -x "$gSCRIPT_PREFLIGHT" ]; then
+        "${BASH:-:}" "$gSCRIPT_PREFLIGHT"
       fi
 
       if [ -n "$gAPT_GET_PATH" ]; then
@@ -258,7 +258,7 @@ else
       gDATE_PATH \
       gREBOOT_REQUIRED_PATH \
       gSHUTDOWN_PATH \
-      gSCRIPT_KILLFIRST \
+      gSCRIPT_PREFLIGHT \
       gAPT_GET_PATH \
       gFLATPAK_PATH \
       gRUNUSER_PATH \
