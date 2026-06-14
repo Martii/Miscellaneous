@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 06 14 001
+# v2026 06 14 002
 #
 ##
 
@@ -54,6 +54,7 @@ declare gSCRIPT_BRANCH="${BASH_SOURCE%/*}"
 
 # Kill first script will be in same folder as updateall... may be string empty to ignore
 # Targetted for users who don't close applications when they are finished when an update is available
+# or those that want preflight action first e.g. arch updates which should never be included by default normally
 declare gSCRIPT_PREFLIGHT="$gSCRIPT_BRANCH/updateallkillfirst"
 
 ##
@@ -80,6 +81,7 @@ else
   declare gSHUTDOWN_PATH="$(type -P shutdown)"
   declare gAPT_GET_PATH="$(type -P apt-get)"
   declare gDNF_PATH="$(type -P dnf)"
+  declare gZYPPER_PATH="$(type -P zypper)"
   declare gRUNUSER_PATH=$(type -P runuser)
   declare gFLATPAK_PATH="$(type -P flatpak)"
   declare gAWK_PATH=$(type -P awk)
@@ -129,7 +131,6 @@ else
 
       if [ -n "$gDNF_PATH" ]; then
         lDISTRO_ID=$("$gAWK_PATH" -F= '/^ID=/ {gsub(/"/, "", $2); print $2}' /etc/os-release)
-
         case "$lDISTRO_ID" in
           "openmandriva")
             echo "--- Starting OpenMandriva DNF Update Chain ---"
@@ -142,6 +143,20 @@ else
           *)
             echo "--- Starting Generic DNF Update Chain ---"
             "$gDNF_PATH" upgrade --refresh -y
+            ;;
+        esac
+      fi
+
+      if [ -n "$gZYPPER_PATH" ]; then
+        echo "--- Starting openSUSE Zypper Update Chain ---"
+
+        lDISTRO_ID=$("$gAWK_PATH" -F= '/^ID=/ {gsub(/"/, "", $2); print $2}' /etc/os-release)
+        case "$lDISTRO_ID" in
+          "opensuse-tumbleweed"|"opensuse-slowroll")
+            "$gZYPPER_PATH" --non-interactive dist-upgrade
+            ;;
+          "opensuse-leap")
+            "$gZYPPER_PATH" --non-interactive update
             ;;
         esac
       fi
@@ -282,6 +297,7 @@ else
       gSCRIPT_PREFLIGHT \
       gAPT_GET_PATH \
       gDNF_PATH \
+      gZYPPER_PATH \
       gFLATPAK_PATH \
       gRUNUSER_PATH \
       gAWK_PATH \
