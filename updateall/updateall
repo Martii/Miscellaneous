@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 06 12 001
+# v2026 06 14 001
 #
 ##
 
@@ -79,6 +79,7 @@ else
   declare gREBOOT_REQUIRED_PATH="/var/run/reboot-required"
   declare gSHUTDOWN_PATH="$(type -P shutdown)"
   declare gAPT_GET_PATH="$(type -P apt-get)"
+  declare gDNF_PATH="$(type -P dnf)"
   declare gRUNUSER_PATH=$(type -P runuser)
   declare gFLATPAK_PATH="$(type -P flatpak)"
   declare gAWK_PATH=$(type -P awk)
@@ -94,6 +95,7 @@ else
     declare lUID=""
     declare lHOME_DIR=""
     declare lFLATPAK_DIR=""
+    declare lDISTRO_ID=""
 
     if [ -n "$lDELAY" ]; then
       sleep "$lDELAY"
@@ -125,15 +127,34 @@ else
         "$gAPT_GET_PATH" -yqq update && "$gAPT_GET_PATH" -yqq full-upgrade && "$gAPT_GET_PATH" -yqq autoremove 2>&1
       fi
 
+      if [ -n "$gDNF_PATH" ]; then
+        lDISTRO_ID=$("$gAWK_PATH" -F= '/^ID=/ {gsub(/"/, "", $2); print $2}' /etc/os-release)
+
+        case "$lDISTRO_ID" in
+          "openmandriva")
+            echo "--- Starting OpenMandriva DNF Update Chain ---"
+
+            "$gDNF_PATH" clean all # Going once...
+            "$gDNF_PATH" clean all # Going twice...
+            "$gDNF_PATH" repolist
+            "$gDNF_PATH" distro-sync --refresh --allowerasing -y
+            ;;
+          *)
+            echo "--- Starting Generic DNF Update Chain ---"
+            "$gDNF_PATH" upgrade --refresh -y
+            ;;
+        esac
+      fi
+
       if [ -n "$gFLATPAK_PATH" ]; then
         echo "--- Starting Flatpak Update Chain ---"
 
-          echo "- Updating system-wide"
+          echo "-- Updating system-wide"
 
           ( "$gFLATPAK_PATH" -y --noninteractive update &&
             "$gFLATPAK_PATH" -y --noninteractive uninstall --unused ) 2>&1 | "$gAWK_PATH" 'NF {p=1} p'
 
-          echo "- Updating user-wide"
+          echo "-- Updating user-wide"
 
           while IFS=: read -r lUSERNAME _ lUID _ _ lHOME_DIR _; do
 
@@ -260,6 +281,7 @@ else
       gSHUTDOWN_PATH \
       gSCRIPT_PREFLIGHT \
       gAPT_GET_PATH \
+      gDNF_PATH \
       gFLATPAK_PATH \
       gRUNUSER_PATH \
       gAWK_PATH \
