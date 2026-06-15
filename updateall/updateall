@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 06 14 002
+# v2026 06 14 003
 #
 ##
 
@@ -87,6 +87,7 @@ else
   declare gAWK_PATH=$(type -P awk)
   declare gSNAP_PATH="$(type -P snap)"
 
+
   updatingall() {
     declare -i lTIMEOUT=1
     declare lWHEN="$1"
@@ -98,6 +99,31 @@ else
     declare lHOME_DIR=""
     declare lFLATPAK_DIR=""
     declare lDISTRO_ID=""
+    declare lREBOOT=0
+
+    needs_reboot() {
+      declare lRESULT=0
+
+      if [ -n "$gAPT_GET_PATH" ] && [ -f "$gREBOOT_REQUIRED_PATH" ]; then
+        (( lRESULT |= 1 ))
+      fi
+
+      if [ -n "$gDNF_PATH" ]; then
+        "$gDNF_PATH" needs-restarting -r
+        (( lRESULT |= ( $? == 1 ) ))
+      fi
+
+      if [ -n "$gZYPPER_PATH" ]; then
+        "$gZYPPER_PATH" needs-rebooting
+        (( lRESULT |= ( $? == 103 ) ))
+      fi
+
+      if (( lRESULT )); then
+        return 1
+      fi
+
+      return 0
+    }
 
     if [ -n "$lDELAY" ]; then
       sleep "$lDELAY"
@@ -112,7 +138,10 @@ else
       echo "updateall (bare manual run)"
     fi
 
-    if [ -f "$gREBOOT_REQUIRED_PATH" ]; then
+    needs_reboot
+    (( lREBOOT |= $? == 1 ))
+
+    if (( lREBOOT )); then
       "$gSHUTDOWN_PATH" -r +$lTIMEOUT "System will reboot for maintenance in $lTIMEOUT minutes"
 
     elif [ -z "$lSKIP" ]; then
@@ -197,8 +226,12 @@ else
         "$gSNAP_PATH" refresh
       fi
 
-      test -f "$gREBOOT_REQUIRED_PATH" && \
-          "$gSHUTDOWN_PATH" -r +$lTIMEOUT "System will reboot for maintenance in $lTIMEOUT minutes"
+      needs_reboot
+      (( lREBOOT |= $? == 1  ))
+
+      if (( lREBOOT )); then
+        "$gSHUTDOWN_PATH" -r +$lTIMEOUT "System will reboot for maintenance in $lTIMEOUT minutes"
+      fi
     fi
 
     exit 0
