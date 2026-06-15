@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 06 14 003
+# v2026 06 14 004
 #
 ##
 
@@ -115,7 +115,7 @@ else
 
       if [ -n "$gZYPPER_PATH" ]; then
         "$gZYPPER_PATH" needs-rebooting
-        (( lRESULT |= ( $? == 103 ) ))
+        (( lRESULT |= ( $? == 102 ) ))
       fi
 
       if (( lRESULT )); then
