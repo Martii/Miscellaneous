@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 06 14 004
+# v2026 06 26 001
 #
 ##
 
@@ -36,7 +36,7 @@
 
 
 # Needed for some distro's
-declare gTARGETS="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+declare -r gTARGETS="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 declare gDIR=""
 declare gTARGET=""
 
@@ -50,42 +50,43 @@ done
 unset IFS
 
 # Get the directory of the running script
-declare gSCRIPT_BRANCH="${BASH_SOURCE%/*}"
+declare -r gSCRIPT_BRANCH="${BASH_SOURCE%/*}"
 
 # Kill first script will be in same folder as updateall... may be string empty to ignore
 # Targetted for users who don't close applications when they are finished when an update is available
 # or those that want preflight action first e.g. arch updates which should never be included by default normally
-declare gSCRIPT_PREFLIGHT="$gSCRIPT_BRANCH/updateallkillfirst"
+# ex. declare -r gSCRIPT_PREFLIGHT="$gSCRIPT_BRANCH/updateallkillfirst"
+declare -r gSCRIPT_PREFLIGHT=""
 
 ##
 declare gWAKEAT=""
 declare gDELAY=""
 declare gSKIPUD=""
 
-declare gLOGGER_PATH="$(type -P logger)"
+declare -r gLOGGER_PATH="$(type -P logger)"
 
 if [ "$EUID" -ne 0 ]; then
   exec sudo "$0" "$@"
     exit 1
 else
-  declare gNOHUP_PATH="$(type -P nohup)"
-  declare gSYSTEMD_INHIBIT_PATH="$(type -P systemd-inhibit)"
-  declare gBASH_PATH="$BASH"
-  declare gTEE_PATH="$(type -P tee)"
-  declare gLIVELOG_PATH="/dev/shm/update_live.log"
-  declare gLOG_PATH="/var/log/updateall.log"
-  declare gSYNC_PATH="$(type -P sync)"
-  declare gRTCWAKE_PATH="$(type -P rtcwake)"
-  declare gDATE_PATH="$(type -P date)"
-  declare gREBOOT_REQUIRED_PATH="/var/run/reboot-required"
-  declare gSHUTDOWN_PATH="$(type -P shutdown)"
-  declare gAPT_GET_PATH="$(type -P apt-get)"
-  declare gDNF_PATH="$(type -P dnf)"
-  declare gZYPPER_PATH="$(type -P zypper)"
-  declare gRUNUSER_PATH=$(type -P runuser)
-  declare gFLATPAK_PATH="$(type -P flatpak)"
-  declare gAWK_PATH=$(type -P awk)
-  declare gSNAP_PATH="$(type -P snap)"
+  declare -r gNOHUP_PATH="$(type -P nohup)"
+  declare -r gSYSTEMD_INHIBIT_PATH="$(type -P systemd-inhibit)"
+  declare -r gBASH_PATH="$BASH"
+  declare -r gTEE_PATH="$(type -P tee)"
+  declare -r gLIVELOG_PATH="/dev/shm/update_live.log"
+  declare -r gLOG_PATH="/var/log/updateall.log"
+  declare -r gSYNC_PATH="$(type -P sync)"
+  declare -r gRTCWAKE_PATH="$(type -P rtcwake)"
+  declare -r gDATE_PATH="$(type -P date)"
+  declare -r gREBOOT_REQUIRED_PATH="/var/run/reboot-required"
+  declare -r gSHUTDOWN_PATH="$(type -P shutdown)"
+  declare -r gAPT_GET_PATH="$(type -P apt-get)"
+  declare -r gDNF_PATH="$(type -P dnf)"
+  declare -r gZYPPER_PATH="$(type -P zypper)"
+  declare -r gRUNUSER_PATH=$(type -P runuser)
+  declare -r gFLATPAK_PATH="$(type -P flatpak)"
+  declare -r gAWK_PATH=$(type -P awk)
+  declare -r gSNAP_PATH="$(type -P snap)"
 
 
   updatingall() {
@@ -347,52 +348,57 @@ else
   [ -t 1 ] && ( sleep 0.1; tail --pid=$lPID -f "$gLIVELOG_PATH" )
 fi
 
-# --- MISCELLANEOUS HELPFUL COMMANDS ---
-# sudo cat /proc/driver/rtc | grep alrm
-# sudo rtcwake -m show
-# journalctl -t updateall --no-pager
-# dmesg | grep -i rtc
-# journalctl | grep -i "systemd-sleep"
-# journalctl --since "03:59" --until "04:01"
-# dmesg | grep -i "wake"
-# journalctl | grep -i "inhibit"
-#
-# clear ; \
-#     echo '$ updateall' ; \
-#     updateall ; \
-#     echo '$ journalctl -t updateall --since "5 minutes ago" --no-pager' ; \
-#     journalctl -t updateall --since "5 minutes ago" --no-pager
-#
-#
-# clear ; \
-#     echo '$ updateall "tomorrow 04:00"' ; \
-#     updateall "tomorrow 04:00" ; \
-#     echo '$ journalctl -t updateall --since "5 minutes ago" --no-pager' ; \
-#     journalctl -t updateall --since "5 minutes ago" --no-pager
-#
-#
+
 # --- DOWNSTREAM EXECUTION HOOK ---
-# Reference these variables in your systemd-inhibit call below:
+# Reference these variables in your systemd-inhibit call:
 # -- "$gWAKEAT" "$gDELAY" "$gSKIPUD"
-#
-# --- CRONTAB DEPLOYMENTS (MULTILINE FORMAT) ---
-# Reboot run [256 Payload Characters][LOGICAL-LINE-CRC32: 44D5F488]
-# @reboot /bin/sh -c ' \
-#     lEXEC="/usr/bin/updateall"; lOFF="5"; lDELAY="30"; lSKIPUD=""; \
-#     set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); \
-#     $lEXEC "tomorrow $2:$1 - $lOFF minutes" "$lDELAY" "$lSKIPUD" \
-# '
-#
-# Once a day run [223 Payload Characters][LOGICAL-LINE-CRC32: 5F3C7A91]
-# 0 4 * * * /bin/sh -c ' \
-#     lEXEC="/usr/bin/updateall"; lOFF="5"; \
-#     set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); \
-#     $lEXEC "tomorrow $2:$1 - $lOFF minutes" \
-# ' #UPDATEALL
-#
-# --- CRONTAB DEPLOYMENTS (SINGLE-LINE FORMAT) ---
-# Reboot run [234 Payload Characters][WHOLE-LINE-CRC32: D02CDF85]
-# @reboot /bin/sh -c 'lEXEC="/usr/bin/updateall"; lOFF="5"; lDELAY="30"; lSKIPUD=""; set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); $lEXEC "tomorrow $2:$1 - $lOFF minutes" "$lDELAY" "$lSKIPUD"'
-#
-# Once a day run [201 Payload Characters][WHOLE-LINE-CRC32: 3AD1EB7D]
-# 0 4 * * * /bin/sh -c 'lEXEC="/usr/bin/updateall"; lOFF="5"; set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); $lEXEC "tomorrow $2:$1 - $lOFF minutes"' #UPDATEALL
+
+: << 'HELP'
+# --- MISCELLANEOUS HELPFUL COMMANDS ---
+sudo rtcwake -m show
+journalctl -t updateall --no-pager
+
+sudo cat /proc/driver/rtc | grep alrm
+dmesg | grep -i rtc
+journalctl | grep -i "systemd-sleep"
+journalctl --since "03:59" --until "04:01"
+dmesg | grep -i "wake"
+journalctl | grep -i "inhibit"
+
+clear ; \
+    echo '$ updateall' ; \
+    updateall ; \
+    echo '$ journalctl -t updateall --since "5 minutes ago" --no-pager' ; \
+    journalctl -t updateall --since "5 minutes ago" --no-pager
+
+
+clear ; \
+    echo '$ updateall "tomorrow 04:00"' ; \
+    updateall "tomorrow 04:00" ; \
+    echo '$ journalctl -t updateall --since "5 minutes ago" --no-pager' ; \
+    journalctl -t updateall --since "5 minutes ago" --no-pager
+HELP
+
+: << 'EXAMPLE'
+# --- CRONTAB DEPLOYMENTS (MULTILINE FORMAT... FOR SHOW ONLY) ---
+# Reboot run [256 Payload Characters][LOGICAL-LINE-CRC32: F079C1C6]
+@reboot /bin/sh -c ' \
+    lEXEC="/usr/bin/updateall"; lOFF="5"; lDELAY="30"; lSKIPUD=""; \
+    set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); \
+    $lEXEC "tomorrow $2:$1 - $lOFF minutes" "$lDELAY" "$lSKIPUD" \
+'
+
+# Once a day run [223 Payload Characters][LOGICAL-LINE-CRC32: 98401BB7]
+0 4 * * * /bin/sh -c ' \
+    lEXEC="/usr/bin/updateall"; lOFF="5"; \
+    set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); \
+    $lEXEC "tomorrow $2:$1 - $lOFF minutes" \
+' #UPDATEALL
+
+# --- CRONTAB DEPLOYMENTS (SINGLE-LINE FORMAT... FOR OPTIONAL USE) ---
+# Reboot run [234 Payload Characters][WHOLE-LINE-CRC32: 647C2CFA]
+@reboot /bin/sh -c 'lEXEC="/usr/bin/updateall"; lOFF="5"; lDELAY="30"; lSKIPUD=""; set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); $lEXEC "tomorrow $2:$1 - $lOFF minutes" "$lDELAY" "$lSKIPUD"'
+
+# Once a day run [201 Payload Characters][WHOLE-LINE-CRC32: A32D042E]
+0 4 * * * /bin/sh -c 'lEXEC="/usr/bin/updateall"; lOFF="5"; set -- $(crontab -l | grep -E "#UPDATEALL[[:space:]]*$" | grep -vE "^(#|@)" | head -n 1); $lEXEC "tomorrow $2:$1 - $lOFF minutes"' #UPDATEALL
+EXAMPLE
