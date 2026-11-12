@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 11 12 001
+# v2026 11 12 002
 #
 ##
 
@@ -340,6 +340,7 @@ else
       gSNAP_PATH
 
   ( "$gNOHUP_PATH" "$gSYSTEMD_INHIBIT_PATH" \
+      --who="updateall" \
       --why="Running updates" \
       --mode=block \
       --what=idle:sleep:shutdown:handle-power-key:handle-suspend-key:handle-hibernate-key:handle-lid-switch \
