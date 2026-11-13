@@ -15,7 +15,7 @@
 #    * It is best to set a delay when waking up or rebooting.
 #    * Typically installed in /usr/bin
 #
-# v2026 11 12 002
+# v2026 11 13 001
 #
 ##
 
@@ -144,7 +144,7 @@ else
 
     if (( lREBOOT )); then
       echo "System will reboot for maintenance in $lTIMEOUT minutes"
-      "$gNOHUP_PATH" "$gBASH_PATH" -c 'sleep "$1" && "$2" -r now 2>&1' -- "$lTIMEOUT" "$gSHUTDOWN_PATH" > /dev/null 2>&1 &
+      "$gNOHUP_PATH" "$gBASH_PATH" -c 'sleep "$(( $1 * 60 ))" && "$2" -r now 2>&1' -- "$lTIMEOUT" "$gSHUTDOWN_PATH" > /dev/null 2>&1 &
 
     elif [ -z "$lSKIP" ]; then
 
@@ -233,7 +233,7 @@ else
 
       if (( lREBOOT )); then
         echo "System will reboot for maintenance in $lTIMEOUT minutes"
-        "$gNOHUP_PATH" "$gBASH_PATH" -c 'sleep "$1" && "$2" -r now 2>&1' -- "$lTIMEOUT" "$gSHUTDOWN_PATH" > /dev/null 2>&1 &
+        "$gNOHUP_PATH" "$gBASH_PATH" -c 'sleep "$(( $1 * 60 ))" && "$2" -r now 2>&1' -- "$lTIMEOUT" "$gSHUTDOWN_PATH" > /dev/null 2>&1 &
       fi
     fi
 
